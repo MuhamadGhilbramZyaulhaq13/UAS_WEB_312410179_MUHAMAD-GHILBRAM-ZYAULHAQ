@@ -3,6 +3,8 @@
 use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
+// Menangani Preflight Request agar tidak 404
+$routes->options('(:any)', function() { return ''; });
 $routes->get('/', 'Home::index');
 // Route untuk Login
 $routes->post('login', 'Auth::login');

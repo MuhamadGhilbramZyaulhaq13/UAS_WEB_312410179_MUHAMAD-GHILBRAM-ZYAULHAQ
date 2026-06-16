@@ -23,7 +23,7 @@ class TokenFilter implements FilterInterface
         $token = explode(' ', $header)[1] ?? '';
 
         try {
-            $key = 'kunci_rahasia_uas_web2'; // Harus sama dengan yang di Auth Controller
+            $key = 'ini_adalah_kunci_rahasia_yang_sangat_panjang_dan_aman_sekali_12345';
             $decoded = JWT::decode($token, new Key($key, 'HS256'));
         } catch (\Exception $e) {
             return $response->setJSON(['status' => 401, 'error' => 'Token tidak valid atau sudah kedaluwarsa.'])->setStatusCode(401);

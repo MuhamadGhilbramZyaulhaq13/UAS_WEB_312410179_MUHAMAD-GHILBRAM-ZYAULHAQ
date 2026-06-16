@@ -13,7 +13,7 @@ class Auth extends ResourceController
     public function login()
     {
         $rules = [
-            'email'    => 'required|email',
+            'email'    => 'required|valid_email',
             'password' => 'required'
         ];
 
@@ -37,10 +37,10 @@ class Auth extends ResourceController
         }
 
         // Generate JWT Token
-        $key = 'kunci_rahasia_uas_web2'; // Bisa diganti sesuai keinginan
+        $key = 'ini_adalah_kunci_rahasia_yang_sangat_panjang_dan_aman_sekali_12345';
         $payload = [
             'iat'   => time(),
-            'exp'   => time() + 3600, // Token kedaluwarsa dalam 1 jam
+            'exp'   => time() + 3600, 
             'uid'   => $user['id'],
             'email' => $user['email'],
             'role'  => $user['role']
