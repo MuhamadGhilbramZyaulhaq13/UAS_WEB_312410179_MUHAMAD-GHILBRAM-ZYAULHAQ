@@ -23,6 +23,7 @@ $routes->get('pengaduan', 'Pengaduan::index');
 $routes->get('pengaduan/(:num)', 'Pengaduan::show/$1');
 
 // Route Pengaduan Terproteksi (Wajib pakai Token)
+$routes->post('pengaduan/create', 'Pengaduan::create');
 $routes->post('pengaduan', 'Pengaduan::create', ['filter' => 'token']);
 $routes->put('pengaduan/(:num)', 'Pengaduan::update/$1', ['filter' => 'token']);
 $routes->delete('pengaduan/(:num)', 'Pengaduan::delete/$1', ['filter' => 'token']);
