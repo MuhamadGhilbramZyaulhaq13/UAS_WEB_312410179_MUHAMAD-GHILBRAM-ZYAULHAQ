@@ -147,19 +147,31 @@ const LoginMasyarakat = {
     methods: {
         async handleLogin() {
             this.isLoading = true;
-            
-            // Simulasi proses verifikasi ke Backend API
-            setTimeout(() => {
-                this.isLoading = false;
+            try {
+                // Mengirim email & password yang diketik user ke backend CI4
+                const response = await axios.post('http://localhost:8080/login', {
+                    email: this.email,
+                    password: this.password
+                });
+
+                // Jika backend bilang OK, simpan kunci (token) dan data penting ke memori browser
+                localStorage.setItem('token', response.data.token);
+                localStorage.setItem('role', response.data.user.role);
+                localStorage.setItem('nama', response.data.user.nama); // Opsional agar nama di navbar bisa berubah
+
+                alert('Berhasil Masuk!');
                 
-                // 1. Simpan tiket masuk (token) dan peran (role) ke dalam memori browser
-                localStorage.setItem('token', 'dummy-token-123');
-                localStorage.setItem('role', 'masyarakat');
-                
-                // 2. Arahkan user ke halaman Dashboard
+                // Arahkan ke dashboard masyarakat
                 this.$router.push('/dashboard'); 
                 
-            }, 1000);
+            } catch (error) {
+                console.error("Gagal Login:", error);
+                // Tangkap pesan error dari CI4 (jika email tidak terdaftar atau password salah)
+                const pesanError = error.response?.data?.messages?.error || 'Login Gagal, periksa koneksi Anda.';
+                alert(pesanError);
+            } finally {
+                this.isLoading = false;
+            }
         }
     },
     template: `
@@ -201,6 +213,10 @@ const LoginMasyarakat = {
                                 class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-[8px] shadow-sm text-sm font-semibold text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all disabled:opacity-70 disabled:cursor-not-allowed">
                                 {{ isLoading ? 'Memproses...' : 'Masuk' }}
                             </button>
+                        </div>
+
+                        <div class="text-center mt-6">
+                            <router-link to="/" class="text-sm font-medium text-text-secondary hover:text-admin transition-colors">&larr; Kembali ke Halaman Publik</router-link>
                         </div>
                     </form>
                 </div>
@@ -383,7 +399,7 @@ const LoginAdmin = {
 const DashboardMasyarakat = {
     data() {
         return {
-            userName: 'Budi Santoso', // Dummy data user yang login
+            userName: 'Budi Santoso',
             form: {
                 judul: '',
                 kategori: '',
@@ -391,47 +407,81 @@ const DashboardMasyarakat = {
                 lampiran: null
             },
             isSubmitting: false,
-            // Dummy riwayat laporan user ini saja
-            riwayat: [
-                { id: 'ADU-0985', judul: 'Jalan Berlubang di Depan Rumah', deskripsi: 'Terdapat lubang sedalam 15cm yang membahayakan pengendara motor saat malam hari.', kategori: 'Infrastruktur', status: 'pending', date: '18 Jun 2026, 02:15' },
-                { id: 'ADU-0982', judul: 'Layanan KTP Terlambat', deskripsi: 'Sudah 2 minggu sejak perekaman, fisik KTP belum kunjung dicetak tanpa alasan yang jelas.', kategori: 'Pelayanan Publik', status: 'in_progress', date: '17 Jun 2026, 10:00' },
-                { id: 'ADU-0950', judul: 'Pohon Tumbang Menghalangi Jalan', deskripsi: 'Pohon beringin besar tumbang menutupi seluruh akses jalan desa pasca badai semalam.', kategori: 'Lingkungan', status: 'resolved', date: '10 Jun 2026, 08:30' },
-            ]
+            // 1. Kosongkan data dummy, biarkan array kosong untuk diisi dari database
+            riwayat: [] 
         };
+    },
+    // 2. Gunakan mounted agar saat halaman dibuka, Vue otomatis mengambil data dari CI4
+    mounted() {
+        this.loadRiwayat();
     },
     methods: {
         handleFileUpload(event) {
             this.form.lampiran = event.target.files[0];
         },
+        
+        // 1. Fungsi mengambil data dari database (GET)
+        async loadRiwayat() {
+            try {
+                // Ambil token dari memori browser
+                const token = localStorage.getItem('token');
+                
+                // Sisipkan token ke dalam Header Authorization
+                const config = {
+                    headers: { Authorization: `Bearer ${token}` }
+                };
+
+                // Kirim request beserta config token-nya
+                const response = await axios.get('http://localhost:8080/pengaduan', config);
+                this.riwayat = response.data; 
+                
+            } catch (error) {
+                console.error("Gagal mengambil data riwayat:", error);
+                if (error.response && error.response.status === 401) {
+                    alert("Sesi Anda telah habis. Silakan login kembali.");
+                    this.logout(); // Paksa keluar jika token tidak valid/kedaluwarsa
+                }
+            }
+        },
+
+        // 2. Fungsi mengirim data ke database (POST)
         async submitLaporan() {
             this.isSubmitting = true;
-            
-            // Simulasi proses API
-            setTimeout(() => {
-                this.isSubmitting = false;
-                
-                // Menambahkan laporan baru ke riwayat lokal (simulasi)
-                const newReport = {
-                    id: 'ADU-' + Math.floor(Math.random() * 9000 + 1000),
-                    judul: this.form.judul,
-                    deskripsi: this.form.deskripsi,
-                    kategori: this.form.kategori,
-                    status: 'pending',
-                    date: 'Baru saja'
+            try {
+                const token = localStorage.getItem('token');
+                const config = {
+                    headers: { Authorization: `Bearer ${token}` }
                 };
+
+                const payload = {
+                    judul: this.form.judul,
+                    kategori: this.form.kategori,
+                    deskripsi: this.form.deskripsi
+                };
+
+                // Tambahkan parameter config di urutan ketiga untuk method POST
+                const response = await axios.post('http://localhost:8080/pengaduan/create', payload, config);
                 
-                this.riwayat.unshift(newReport); // Taruh di paling atas
-                alert('Laporan berhasil dikirim!');
+                alert('Laporan berhasil dikirim dan masuk ke database!');
                 
                 // Reset Form
                 this.form.judul = '';
                 this.form.kategori = '';
                 this.form.deskripsi = '';
                 this.form.lampiran = null;
-                this.$refs.fileInput.value = ''; // Reset input file UI
+                if(this.$refs.fileInput) this.$refs.fileInput.value = '';
                 
-            }, 1000);
+                // Ambil ulang data
+                this.loadRiwayat();
+                
+            } catch (error) {
+                console.error("Gagal mengirim laporan:", error);
+                alert('Gagal mengirim laporan. Sesi mungkin telah habis.');
+            } finally {
+                this.isSubmitting = false;
+            }
         },
+        
         logout() {
             if(confirm('Apakah Anda yakin ingin keluar?')) {
                 localStorage.removeItem('token');

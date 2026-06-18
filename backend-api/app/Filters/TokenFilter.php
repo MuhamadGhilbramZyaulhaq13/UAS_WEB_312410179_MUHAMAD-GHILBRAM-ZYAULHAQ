@@ -12,18 +12,19 @@ class TokenFilter implements FilterInterface
 {
     public function before(RequestInterface $request, $arguments = null)
     {
-        $header = $request->getServer('HTTP_AUTHORIZATION');
-        $response = service('response');
+        $header = $request->getHeaderLine('Authorization');
+        $token = null;
 
-        if (!$header) {
-            return $response->setJSON(['status' => 401, 'error' => 'Akses ditolak. Token tidak ditemukan.'])->setStatusCode(401);
+        if (preg_match('/Bearer\s(\S+)/', $header, $matches)) {
+            $token = $matches[1];
         }
 
-        // Mengambil token dari string "Bearer <token>"
-        $token = explode(' ', $header)[1] ?? '';
+        if (is_null($token) || empty($token)) {
+            return \Config\Services::response()->setJSON(['message' => 'Akses ditolak: Token tidak ada'])->setStatusCode(401);
+        }
 
         try {
-            $key = 'ini_adalah_kunci_rahasia_yang_sangat_panjang_dan_aman_sekali_12345';
+            $key = 'muhamadghlbramzyaulhaqheriherlambangdanurprasetyawendahaikallukmannurhakimenricosyafalullahardiansyah';
             $decoded = JWT::decode($token, new Key($key, 'HS256'));
         } catch (\Exception $e) {
             return $response->setJSON(['status' => 401, 'error' => 'Token tidak valid atau sudah kedaluwarsa.'])->setStatusCode(401);

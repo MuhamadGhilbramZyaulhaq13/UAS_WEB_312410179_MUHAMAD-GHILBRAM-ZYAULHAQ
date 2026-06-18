@@ -1,14 +1,28 @@
 <?php
-
 namespace App\Models;
-
 use CodeIgniter\Model;
 
 class PengaduanModel extends Model
 {
     protected $table            = 'pengaduan';
     protected $primaryKey       = 'id';
-    protected $allowedFields    = ['user_id', 'kategori_id', 'judul', 'isi_laporan', 'status'];
+    protected $useAutoIncrement = true;
+    protected $returnType       = 'array';
+    
+    // PASTIKAN ARRAY INI LENGKAP:
+    protected $allowedFields    = [
+        'kode_laporan', 
+        'user_id', 
+        'judul', 
+        'kategori', 
+        'deskripsi', 
+        'lampiran', 
+        'status'
+    ];
+
+    protected $useTimestamps = true;
+    protected $createdField  = 'created_at';
+    protected $updatedField  = 'updated_at';
 
     // Fungsi tambahan untuk menggabungkan tabel pengaduan, users, dan kategori
     public function getPengaduan($id = false)

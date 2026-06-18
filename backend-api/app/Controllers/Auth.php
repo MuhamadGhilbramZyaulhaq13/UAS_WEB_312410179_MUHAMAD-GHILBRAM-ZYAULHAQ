@@ -8,49 +8,40 @@ use Firebase\JWT\JWT;
 
 class Auth extends ResourceController
 {
-    protected $format = 'json';
-
     public function login()
     {
-        $rules = [
-            'email'    => 'required|valid_email',
-            'password' => 'required'
-        ];
+        $json = $this->request->getJSON();
+        $email = $json->email ?? '';
+        $password = $json->password ?? '';
 
-        // Validasi input
-        if (!$this->validate($rules)) {
-            return $this->failValidationErrors($this->validator->getErrors());
-        }
+        $userModel = new UserModel();
+        $user = $userModel->where('email', $email)->first();
 
-        $model = new UserModel();
-        $user = $model->where('email', $this->request->getVar('email'))->first();
-
-        // Jika email tidak ada
         if (!$user) {
-            return $this->failNotFound('Email tidak ditemukan');
+            return $this->failNotFound('Email tidak terdaftar');
         }
 
-        // Verifikasi password (menggunakan fungsi bawaan PHP password_verify)
-        $verify = password_verify($this->request->getVar('password'), $user['password']);
-        if (!$verify) {
+        $isPasswordLolos = password_verify($password, $user['password']) || $password === $user['password'];
+
+        if (!$isPasswordLolos) {
             return $this->failUnauthorized('Password salah');
         }
 
-        // Generate JWT Token
-        $key = 'ini_adalah_kunci_rahasia_yang_sangat_panjang_dan_aman_sekali_12345';
+        $key = getenv('JWT_SECRET') ?: 'muhamadghlbramzyaulhaqheriherlambangdanurprasetyawendahaikallukmannurhakimenricosyafalullahardiansyah';
+        
         $payload = [
-            'iat'   => time(),
-            'exp'   => time() + 3600, 
-            'uid'   => $user['id'],
-            'email' => $user['email'],
-            'role'  => $user['role']
+            'iat'  => time(),                      // Waktu token dibuat
+            'exp'  => time() + (60 * 60 * 24),     // Token kedaluwarsa dalam 24 jam
+            'uid'  => $user['id'],                 // ID user disisipkan ke dalam token
+            'role' => $user['role'],               // Peran user (masyarakat/admin)
+            'nama' => $user['nama']
         ];
 
+        // Bungkus menjadi token (PENTING: Pastikan kamu sudah menjalankan "composer require firebase/php-jwt" di terminal)
         $token = JWT::encode($payload, $key, 'HS256');
 
         return $this->respond([
-            'status'  => 200,
-            'message' => 'Login berhasil',
+            'message' => 'Login Berhasil',
             'token'   => $token,
             'user'    => [
                 'id'   => $user['id'],
