@@ -27,6 +27,13 @@ const HomePublic = {
                 this.isLoading = false;
             }
         },
+        scrollToTimeline() {
+            const elemenTimeline = document.getElementById('timeline');
+            if (elemenTimeline) {
+                // Menggulir layar ke bagian timeline dengan animasi yang mulus
+                elemenTimeline.scrollIntoView({ behavior: 'smooth' });
+            }
+        },
         getStatusBadge(status) {
             const badges = {
                 'pending': 'bg-cyan-100 text-info border-cyan-200',
@@ -76,9 +83,9 @@ const HomePublic = {
                         <router-link to="/login" class="bg-primary text-white text-base font-semibold px-8 py-3.5 rounded-[8px] hover:bg-primary-dark shadow-soft transition-all transform hover:-translate-y-0.5">
                             Mulai Buat Laporan
                         </router-link>
-                        <a href="#timeline" class="bg-surface border border-border text-text-primary text-base font-semibold px-8 py-3.5 rounded-[8px] hover:bg-gray-50 transition-all">
+                        <button @click.prevent="scrollToTimeline" class="bg-surface border border-border text-text-primary text-base font-semibold px-8 py-3.5 rounded-[8px] hover:bg-gray-50 transition-all cursor-pointer">
                             Lihat Timeline
-                        </a>
+                        </button>
                     </div>
                 </div>
             </section>
@@ -220,7 +227,6 @@ const LoginMasyarakat = {
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <label for="password" class="block text-sm font-medium text-text-primary">Password</label>
-                                <a href="#" class="text-sm font-medium text-primary hover:text-primary-dark transition-colors">Lupa password?</a>
                             </div>
                             <input id="password" v-model="password" type="password" required 
                                 class="w-full px-4 py-2.5 bg-background border border-border rounded-[8px] focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm" 
@@ -669,22 +675,33 @@ const DashboardMasyarakat = {
 // ==========================================
 // DASHBOARD ADMIN
 // ==========================================
+// ==========================================
+// DASHBOARD ADMIN (FULL-STACK & MULTI-TAB)
+// ==========================================
 const DashboardAdmin = {
     data() {
         return {
             adminName: '',
             isSidebarOpen: false,
+            activeTab: 'laporan', 
             searchQuery: '',
             filterStatus: '',
             semuaLaporan: [],
             showStatusModal: false,
             selectedReportId: null,
             newStatus: '',
-            isUpdating: false
+            isUpdating: false,
+            daftarPengguna: [],
+            formUser: {
+                nama: '',
+                email: '',
+                password: '',
+                role: 'masyarakat'
+            },
+            isSubmittingUser: false
         };
     },
     computed: {
-        // Fitur Pencarian & Filter Real-time di sisi Frontend
         filteredLaporan() {
             return this.semuaLaporan.filter(item => {
                 const matchSearch = item.judul.toLowerCase().includes(this.searchQuery.toLowerCase()) || 
@@ -694,26 +711,26 @@ const DashboardAdmin = {
                 return matchSearch && matchStatus;
             });
         },
-        // Statistik otomatis mengikuti jumlah data asli dari database
         statTotal() { return this.semuaLaporan.length; },
         statBaru() { return this.semuaLaporan.filter(i => i.status === 'pending').length; },
         statProses() { return this.semuaLaporan.filter(i => i.status === 'in_progress').length; },
         statSelesai() { return this.semuaLaporan.filter(i => i.status === 'resolved').length; }
     },
     mounted() {
-        // Ambil nama admin dari localStorage jalankan pengambilan data
         this.adminName = localStorage.getItem('nama') || 'Administrator';
         this.loadAllLaporan();
     },
     methods: {
-        // 1. Fungsi Menarik Seluruh Laporan dari Database
+        switchTab(tabName) {
+            this.activeTab = tabName;
+            if (tabName === 'pengguna' && this.daftarPengguna.length === 0) {
+                this.loadAllUsers();
+            }
+        },
         async loadAllLaporan() {
             try {
                 const token = localStorage.getItem('token');
-                const config = {
-                    headers: { Authorization: `Bearer ${token}` }
-                };
-                // Memanggil endpoint publik/admin untuk melihat semua aduan
+                const config = { headers: { Authorization: `Bearer ${token}` } };
                 const response = await axios.get('http://localhost:8080/pengaduan', config);
                 this.semuaLaporan = response.data;
             } catch (error) {
@@ -721,63 +738,85 @@ const DashboardAdmin = {
                 alert("Gagal mengambil data. Pastikan Anda sudah login sebagai Admin.");
             }
         },
-
-        // 2. Fungsi Hapus Laporan Langsung ke Database MySQL
         async hancurkanLaporan(idLaporan, idDatabase) {
-            // idDatabase kita perlukan karena URL CI4 membutuhkan primary key (angka)
             if (confirm(`PERINGATAN!\n\nApakah Anda yakin ingin MENGHAPUS permanen laporan dengan ID: ${idLaporan}?`)) {
                 try {
                     const token = localStorage.getItem('token');
-                    const config = {
-                        headers: { Authorization: `Bearer ${token}` }
-                    };
-
-                    // Mengirim request DELETE ke CodeIgniter 4
+                    const config = { headers: { Authorization: `Bearer ${token}` } };
                     await axios.delete(`http://localhost:8080/pengaduan/${idDatabase}`, config);
-                    
                     alert(`Laporan ${idLaporan} berhasil dihapus dari database!`);
-                    this.loadAllLaporan(); // Refresh data tabel
+                    this.loadAllLaporan(); 
                 } catch (error) {
                     console.error("Gagal menghapus laporan:", error);
                     alert("Akses ditolak atau gagal menghapus data.");
                 }
             }
         },
-
-        async ubahStatus(idLaporan, statusSaatIni) {
+        ubahStatus(idLaporan, statusSaatIni) {
             this.selectedReportId = idLaporan;
-            this.newStatus = statusSaatIni; // Set pilihan dropdown sesuai status saat ini
+            this.newStatus = statusSaatIni;
             this.showStatusModal = true;
         },
-
-        // Menutup Modal
         closeStatusModal() {
             this.showStatusModal = false;
             this.selectedReportId = null;
             this.newStatus = '';
         },
-
-        // Mengirim data ke Database saat tombol Simpan ditekan
         async submitUpdateStatus() {
             if (!this.selectedReportId || !this.newStatus) return;
-            
             this.isUpdating = true;
             try {
                 const token = localStorage.getItem('token');
                 const config = { headers: { Authorization: `Bearer ${token}` } };
                 const payload = { status: this.newStatus };
-
                 await axios.put(`http://localhost:8080/pengaduan/${this.selectedReportId}`, payload, config);
-                
                 alert(`Sukses! Status laporan ${this.selectedReportId} berhasil diperbarui.`);
-                this.closeStatusModal(); // Tutup modal
-                this.loadAllLaporan();   // Refresh tabel otomatis
-                
+                this.closeStatusModal(); 
+                this.loadAllLaporan();   
             } catch (error) {
                 console.error("Gagal mengubah status:", error);
                 alert("Terjadi kesalahan jaringan atau server saat mengubah status.");
             } finally {
                 this.isUpdating = false;
+            }
+        },
+        async loadAllUsers() {
+            try {
+                const token = localStorage.getItem('token');
+                const config = { headers: { Authorization: `Bearer ${token}` } };
+                const response = await axios.get('http://localhost:8080/users', config);
+                this.daftarPengguna = response.data;
+            } catch(error) {
+                console.error("Gagal memuat pengguna:", error);
+            }
+        },
+        async submitPenggunaBaru() {
+            this.isSubmittingUser = true;
+            try {
+                const token = localStorage.getItem('token');
+                const config = { headers: { Authorization: `Bearer ${token}` } };
+                await axios.post('http://localhost:8080/users', this.formUser, config);
+                alert("Pengguna berhasil ditambahkan ke dalam database!");
+                this.formUser = { nama: '', email: '', password: '', role: 'masyarakat' };
+                this.loadAllUsers(); 
+            } catch(error) {
+                const msg = error.response?.data?.messages?.error || "Gagal menambahkan pengguna. Email mungkin sudah terdaftar.";
+                alert(msg);
+            } finally {
+                this.isSubmittingUser = false;
+            }
+        },
+        async hapusPengguna(id, nama) {
+            if (confirm(`Peringatan!\n\nAnda yakin ingin menghapus akun '${nama}' secara permanen?`)) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const config = { headers: { Authorization: `Bearer ${token}` } };
+                    await axios.delete(`http://localhost:8080/users/${id}`, config);
+                    alert("Akun pengguna berhasil dihapus!");
+                    this.loadAllUsers();
+                } catch(error) {
+                    alert("Gagal menghapus pengguna.");
+                }
             }
         },
         logout() {
@@ -805,9 +844,7 @@ const DashboardAdmin = {
     template: `
         <div class="min-h-screen flex bg-background">
             
-            <!-- 1. SIDEBAR (Fixed Desktop, Collapsible Mobile) -->
             <aside :class="isSidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 z-40 w-64 bg-admin text-white transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col shadow-xl">
-                <!-- Header Sidebar -->
                 <div class="h-16 flex items-center justify-center border-b border-indigo-700/50 px-6">
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded bg-white flex items-center justify-center text-admin font-bold font-heading text-lg">e</div>
@@ -815,20 +852,22 @@ const DashboardAdmin = {
                     </div>
                 </div>
                 
-                <!-- Menu Navigasi -->
                 <nav class="flex-1 px-4 py-6 space-y-2">
-                    <a href="#" class="flex items-center gap-3 px-4 py-3 bg-indigo-700/50 rounded-lg text-sm font-medium transition-colors text-white">
+                    <a href="#" @click.prevent="switchTab('laporan')" 
+                       :class="activeTab === 'laporan' ? 'bg-indigo-800/50 text-white' : 'text-indigo-200 hover:bg-indigo-800/30 hover:text-white'"
+                       class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                         Dashboard & Aduan
                     </a>
-                    <!-- Fitur tambahan (Placeholder) -->
-                    <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-indigo-800/30 rounded-lg text-sm font-medium transition-colors text-indigo-200 hover:text-white">
+                    
+                    <a href="#" @click.prevent="switchTab('pengguna')" 
+                       :class="activeTab === 'pengguna' ? 'bg-indigo-800/50 text-white' : 'text-indigo-200 hover:bg-indigo-800/30 hover:text-white'"
+                       class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         Kelola Pengguna
                     </a>
                 </nav>
 
-                <!-- Footer Sidebar (User & Logout) -->
                 <div class="p-4 border-t border-indigo-700/50">
                     <div class="flex items-center gap-3 px-4 py-2 mb-2">
                         <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm">{{ adminName.charAt(0) }}</div>
@@ -844,13 +883,10 @@ const DashboardAdmin = {
                 </div>
             </aside>
 
-            <!-- Overlay transparan untuk nutup sidebar di mobile -->
             <div v-if="isSidebarOpen" @click="isSidebarOpen = false" class="fixed inset-0 bg-gray-900/50 z-30 lg:hidden"></div>
 
-            <!-- 2. KONTEN UTAMA KANAN -->
             <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
                 
-                <!-- Navbar Mobile Toggle -->
                 <header class="h-16 flex items-center justify-between px-6 bg-surface border-b border-border lg:hidden">
                     <span class="font-heading font-bold text-admin">e-Report Admin</span>
                     <button @click="isSidebarOpen = true" class="text-text-secondary hover:text-admin">
@@ -858,130 +894,195 @@ const DashboardAdmin = {
                     </button>
                 </header>
 
-                <!-- Scrollable Content -->
                 <main class="flex-1 overflow-y-auto p-6 lg:p-8">
                     
-                    <div class="mb-8">
-                        <h1 class="text-2xl font-bold font-heading text-text-primary">Overview Pengaduan</h1>
-                        <p class="text-text-secondary text-sm">Pantau dan kelola seluruh laporan yang masuk dari masyarakat.</p>
-                    </div>
+                    <div v-if="activeTab === 'laporan'">
+                        <div class="mb-8">
+                            <h1 class="text-2xl font-bold font-heading text-text-primary">Overview Pengaduan</h1>
+                            <p class="text-text-secondary text-sm">Pantau dan kelola seluruh laporan yang masuk dari masyarakat.</p>
+                        </div>
 
-                    <!-- CARD STATISTIK -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-                        <!-- Total -->
-                        <div class="bg-surface p-5 rounded-[12px] border border-border shadow-soft flex items-center justify-between">
-                            <div>
-                                <p class="text-sm font-medium text-text-secondary">Total Aduan</p>
-                                <p class="text-3xl font-bold font-heading text-text-primary mt-1">{{ statTotal }}</p>
-                            </div>
-                            <div class="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg></div>
-                        </div>
-                        <!-- Baru (Pending) -->
-                        <div class="bg-surface p-5 rounded-[12px] border border-cyan-200 shadow-soft flex items-center justify-between">
-                            <div>
-                                <p class="text-sm font-medium text-text-secondary">Aduan Baru</p>
-                                <p class="text-3xl font-bold font-heading text-info mt-1">{{ statBaru }}</p>
-                            </div>
-                            <div class="w-12 h-12 rounded-full bg-cyan-50 flex items-center justify-center text-info"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
-                        </div>
-                        <!-- Diproses -->
-                        <div class="bg-surface p-5 rounded-[12px] border border-amber-200 shadow-soft flex items-center justify-between">
-                            <div>
-                                <p class="text-sm font-medium text-text-secondary">Diproses</p>
-                                <p class="text-3xl font-bold font-heading text-warning mt-1">{{ statProses }}</p>
-                            </div>
-                            <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-warning"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
-                        </div>
-                        <!-- Selesai -->
-                        <div class="bg-surface p-5 rounded-[12px] border border-green-200 shadow-soft flex items-center justify-between">
-                            <div>
-                                <p class="text-sm font-medium text-text-secondary">Selesai</p>
-                                <p class="text-3xl font-bold font-heading text-success mt-1">{{ statSelesai }}</p>
-                            </div>
-                            <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-success"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                        </div>
-                    </div>
-
-                    <!-- TABEL DATA -->
-                    <div class="bg-surface rounded-[12px] shadow-soft border border-border overflow-hidden">
-                        
-                        <!-- Header Tabel (Search & Filter) -->
-                        <div class="p-5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <h2 class="font-heading font-bold text-lg text-text-primary">Daftar Laporan Masuk</h2>
-                            
-                            <div class="flex flex-col sm:flex-row gap-3">
-                                <!-- Search -->
-                                <div class="relative">
-                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                    </div>
-                                    <input v-model="searchQuery" type="text" class="pl-10 pr-4 py-2 bg-background border border-border rounded-[8px] focus:ring-2 focus:ring-admin focus:border-admin text-sm w-full sm:w-64" placeholder="Cari ID atau Judul...">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                            <div class="bg-surface p-5 rounded-[12px] border border-border shadow-soft flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-text-secondary">Total Aduan</p>
+                                    <p class="text-3xl font-bold font-heading text-text-primary mt-1">{{ statTotal }}</p>
                                 </div>
-                                <!-- Filter Status -->
-                                <select v-model="filterStatus" class="px-4 py-2 bg-background border border-border rounded-[8px] focus:ring-2 focus:ring-admin focus:border-admin text-sm outline-none">
-                                    <option value="">Semua Status</option>
-                                    <option value="pending">Baru (Pending)</option>
-                                    <option value="in_progress">Diproses</option>
-                                    <option value="resolved">Selesai</option>
-                                    <option value="rejected">Ditolak</option>
-                                </select>
+                                <div class="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg></div>
+                            </div>
+                            <div class="bg-surface p-5 rounded-[12px] border border-cyan-200 shadow-soft flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-text-secondary">Aduan Baru</p>
+                                    <p class="text-3xl font-bold font-heading text-info mt-1">{{ statBaru }}</p>
+                                </div>
+                                <div class="w-12 h-12 rounded-full bg-cyan-50 flex items-center justify-center text-info"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
+                            </div>
+                            <div class="bg-surface p-5 rounded-[12px] border border-amber-200 shadow-soft flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-text-secondary">Diproses</p>
+                                    <p class="text-3xl font-bold font-heading text-warning mt-1">{{ statProses }}</p>
+                                </div>
+                                <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-warning"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
+                            </div>
+                            <div class="bg-surface p-5 rounded-[12px] border border-green-200 shadow-soft flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-text-secondary">Selesai</p>
+                                    <p class="text-3xl font-bold font-heading text-success mt-1">{{ statSelesai }}</p>
+                                </div>
+                                <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-success"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
                             </div>
                         </div>
 
-                        <!-- Wrapper Tabel agar bisa di-scroll horizontal di layar kecil -->
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse whitespace-nowrap">
-                                <thead>
-                                    <tr class="bg-background/50 border-b border-border text-sm text-text-secondary">
-                                        <th class="py-3 px-5 font-semibold">ID Laporan</th>
-                                        <th class="py-3 px-5 font-semibold">Tanggal</th>
-                                        <th class="py-3 px-5 font-semibold">Pelapor</th>
-                                        <th class="py-3 px-5 font-semibold">Judul Aduan</th>
-                                        <th class="py-3 px-5 font-semibold">Status</th>
-                                        <th class="py-3 px-5 font-semibold text-right">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="item in filteredLaporan" :key="item.id" class="border-b border-border hover:bg-gray-50/50 transition-colors">
-                                        <td class="py-3 px-5 font-mono text-sm font-medium text-admin">{{ item.id }}</td>
-                                        <td class="py-3 px-5 text-sm text-text-secondary">{{ item.date }}</td>
-                                        <td class="py-3 px-5 text-sm font-medium text-text-primary">{{ item.pelapor }}</td>
-                                        <td class="py-3 px-5 text-sm text-text-secondary max-w-xs truncate">{{ item.judul }}</td>
-                                        <td class="py-3 px-5">
-                                            <span :class="getStatusBadge(item.status)" class="text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border">
-                                                {{ translateStatus(item.status) }}
-                                            </span>
-                                        </td>
-                                        <td class="py-3 px-5 flex justify-end gap-2">
-                                            <!-- Tombol Ubah / Lihat -->
-                                            <button @click="ubahStatus(item.id)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold transition border border-indigo-200">
-                                                Tinjau & Edit
-                                            </button>
-                                            <button @click="hancurkanLaporan(item.id, item.db_id || item.id)" class="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-semibold transition border border-red-200">
-                                                Hapus
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <!-- Jika data filter kosong -->
-                                    <tr v-if="filteredLaporan.length === 0">
-                                        <td colspan="6" class="py-8 text-center text-text-secondary text-sm">
-                                            Tidak ada laporan yang sesuai dengan pencarian/filter.
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <div class="bg-surface rounded-[12px] shadow-soft border border-border overflow-hidden">
+                            <div class="p-5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <h2 class="font-heading font-bold text-lg text-text-primary">Daftar Laporan Masuk</h2>
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                        </div>
+                                        <input v-model="searchQuery" type="text" class="pl-10 pr-4 py-2 bg-background border border-border rounded-[8px] focus:ring-2 focus:ring-admin focus:border-admin text-sm w-full sm:w-64" placeholder="Cari ID atau Judul...">
+                                    </div>
+                                    <select v-model="filterStatus" class="px-4 py-2 bg-background border border-border rounded-[8px] focus:ring-2 focus:ring-admin focus:border-admin text-sm outline-none">
+                                        <option value="">Semua Status</option>
+                                        <option value="pending">Baru (Pending)</option>
+                                        <option value="in_progress">Diproses</option>
+                                        <option value="resolved">Selesai</option>
+                                        <option value="rejected">Ditolak</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse whitespace-nowrap">
+                                    <thead>
+                                        <tr class="bg-background/50 border-b border-border text-sm text-text-secondary">
+                                            <th class="py-3 px-5 font-semibold">ID Laporan</th>
+                                            <th class="py-3 px-5 font-semibold">Tanggal</th>
+                                            <th class="py-3 px-5 font-semibold">Pelapor</th>
+                                            <th class="py-3 px-5 font-semibold">Judul Aduan</th>
+                                            <th class="py-3 px-5 font-semibold">Status</th>
+                                            <th class="py-3 px-5 font-semibold text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="item in filteredLaporan" :key="item.id" class="border-b border-border hover:bg-gray-50/50 transition-colors">
+                                            <td class="py-3 px-5 font-mono text-sm font-medium text-admin">{{ item.id }}</td>
+                                            <td class="py-3 px-5 text-sm text-text-secondary">{{ item.date }}</td>
+                                            <td class="py-3 px-5 text-sm font-medium text-text-primary">{{ item.pelapor }}</td>
+                                            <td class="py-3 px-5 text-sm text-text-secondary max-w-xs truncate">{{ item.judul }}</td>
+                                            <td class="py-3 px-5">
+                                                <span :class="getStatusBadge(item.status)" class="text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border">
+                                                    {{ translateStatus(item.status) }}
+                                                </span>
+                                            </td>
+                                            <td class="py-3 px-5 flex justify-end gap-2">
+                                                <button @click="ubahStatus(item.id, item.status)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold transition border border-indigo-200">
+                                                    Tinjau & Edit
+                                                </button>
+                                                <button @click="hancurkanLaporan(item.id, item.db_id || item.id)" class="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-semibold transition border border-red-200">
+                                                    Hapus
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="filteredLaporan.length === 0">
+                                            <td colspan="6" class="py-8 text-center text-text-secondary text-sm">
+                                                Tidak ada laporan yang sesuai dengan pencarian/filter.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="activeTab === 'pengguna'">
+                        <div class="mb-8">
+                            <h1 class="text-2xl font-bold font-heading text-text-primary">Kelola Basis Pengguna</h1>
+                            <p class="text-sm text-text-secondary mt-1">Tambahkan administrator baru atau hapus akun pengguna yang melanggar.</p>
                         </div>
 
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-1 bg-surface rounded-[12px] border border-border shadow-soft p-5 h-fit">
+                                <h2 class="font-heading font-bold text-lg mb-4 text-text-primary border-b border-border pb-2">Tambah Pengguna Baru</h2>
+                                <form @submit.prevent="submitPenggunaBaru" class="space-y-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-text-secondary mb-1">Nama Lengkap</label>
+                                        <input type="text" v-model="formUser.nama" required class="w-full px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-admin focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-text-secondary mb-1">Alamat Email</label>
+                                        <input type="email" v-model="formUser.email" required class="w-full px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-admin focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-text-secondary mb-1">Password</label>
+                                        <input type="password" v-model="formUser.password" required class="w-full px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-admin focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-text-secondary mb-1">Hak Akses (Role)</label>
+                                        <select v-model="formUser.role" class="w-full px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-admin focus:outline-none">
+                                            <option value="masyarakat">Masyarakat Umum</option>
+                                            <option value="admin">Administrator</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" :disabled="isSubmittingUser" class="w-full bg-admin hover:bg-indigo-700 text-white font-semibold py-2 rounded-md text-sm transition-colors mt-2 disabled:opacity-50">
+                                        {{ isSubmittingUser ? 'Menyimpan...' : 'Simpan Pengguna' }}
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div class="lg:col-span-2 bg-surface rounded-[12px] border border-border shadow-soft overflow-hidden">
+                                <div class="p-4 border-b border-border bg-slate-50/50">
+                                    <h2 class="font-heading font-bold text-lg text-text-primary">Daftar Akun Terdaftar</h2>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="bg-background border-b border-border text-xs uppercase tracking-wider text-text-secondary">
+                                                <th class="p-4 font-semibold w-16">ID</th>
+                                                <th class="p-4 font-semibold">Nama & Email</th>
+                                                <th class="p-4 font-semibold">Role</th>
+                                                <th class="p-4 font-semibold text-right">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="text-sm divide-y divide-border">
+                                            <tr v-for="user in daftarPengguna" :key="user.id" class="hover:bg-slate-50 transition-colors">
+                                                <td class="p-4 font-mono font-medium text-text-secondary">{{ user.id }}</td>
+                                                <td class="p-4">
+                                                    <div class="flex flex-col">
+                                                        <span class="font-bold text-text-primary">{{ user.nama }}</span>
+                                                        <span class="text-text-secondary text-xs">{{ user.email }}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="p-4">
+                                                    <span :class="user.role === 'admin' ? 'bg-indigo-100 text-admin border-indigo-200' : 'bg-gray-100 text-gray-600 border-gray-200'" class="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border">
+                                                        {{ user.role }}
+                                                    </span>
+                                                </td>
+                                                <td class="p-4 text-right">
+                                                    <button @click="hapusPengguna(user.id, user.nama)" class="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-semibold transition border border-red-200">
+                                                        Hapus Akun
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="daftarPengguna.length === 0">
+                                                <td colspan="4" class="p-8 text-center text-text-secondary text-sm">Belum ada data pengguna yang dimuat.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
                 </main>
             </div>
+
             <div v-if="showStatusModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity">
                 <div class="bg-surface rounded-[12px] shadow-xl w-full max-w-md p-6 transform transition-all border border-border">
                     <h3 class="text-xl font-bold font-heading text-text-primary mb-2">Ubah Status Laporan</h3>
                     <p class="text-sm text-text-secondary mb-6">
                         Pilih status penanganan terbaru untuk laporan <span class="font-mono font-bold text-admin bg-admin/10 px-1.5 py-0.5 rounded">{{ selectedReportId }}</span>
                     </p>
-                    
                     <div class="mb-6">
                         <label class="block text-sm font-medium text-text-primary mb-2">Status Penanganan</label>
                         <select v-model="newStatus" class="w-full border border-border bg-background text-text-primary rounded-[8px] py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-admin focus:border-admin text-sm transition-all shadow-sm cursor-pointer">
@@ -991,7 +1092,6 @@ const DashboardAdmin = {
                             <option value="rejected">Ditolak (Rejected)</option>
                         </select>
                     </div>
-                    
                     <div class="flex justify-end gap-3 mt-8">
                         <button @click="closeStatusModal" :disabled="isUpdating" class="bg-background border border-border rounded-[8px] py-2 px-4 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-slate-50 transition-colors disabled:opacity-50">
                             Batal

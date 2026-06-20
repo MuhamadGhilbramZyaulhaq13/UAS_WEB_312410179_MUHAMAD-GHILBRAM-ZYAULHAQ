@@ -17,7 +17,7 @@ $routes->post('kategori', 'Kategori::create', ['filter' => 'token']);
 $routes->put('kategori/(:num)', 'Kategori::update/$1', ['filter' => 'token']);
 $routes->delete('kategori/(:num)', 'Kategori::delete/$1', ['filter' => 'token']);
 
-// Route Pengaduan Terbuka (Bisa diakses siapa saja untuk Landing Page)
+// Route Pengaduan Terbuka 
 $routes->get('pengaduan', 'Pengaduan::index');
 $routes->get('pengaduan/(:num)', 'Pengaduan::show/$1');
 
@@ -25,3 +25,8 @@ $routes->get('pengaduan/(:num)', 'Pengaduan::show/$1');
 $routes->post('pengaduan/create', 'Pengaduan::create', ['filter' => 'token']);
 $routes->put('pengaduan/(:segment)', 'Pengaduan::update/$1', ['filter' => 'token']);
 $routes->delete('pengaduan/(:segment)', 'Pengaduan::delete/$1', ['filter' => 'token']);
+
+// Route Kelola Pengguna 
+$routes->get('users', 'Users::index', ['filter' => 'token']);
+$routes->post('users', 'Users::create', ['filter' => 'token']);
+$routes->delete('users/(:num)', 'Users::delete/$1', ['filter' => 'token']);
