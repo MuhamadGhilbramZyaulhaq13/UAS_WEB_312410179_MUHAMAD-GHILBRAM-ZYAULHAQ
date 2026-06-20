@@ -5,34 +5,40 @@
 const HomePublic = {
     data() {
         return {
-            // Data dummy sementara sebelum kita hubungkan ke Backend CI4
-            recentReports: [
-                { id: 'ADU-0981', judul: 'Jalan Berlubang di Pusat Kota', deskripsi: 'Terdapat lubang besar yang membahayakan pengendara di pertigaan lampu merah. Sudah ada 2 motor yang jatuh.', kategori: 'Infrastruktur', status: 'resolved', date: '18 Jun 2026, 08:30' },
-                { id: 'ADU-0980', judul: 'Pungli di Kantor Pelayanan', deskripsi: 'Oknum petugas meminta biaya tambahan tanpa kuitansi resmi saat pengurusan dokumen kependudukan.', kategori: 'Pelayanan Publik', status: 'in_progress', date: '17 Jun 2026, 14:15' },
-                { id: 'ADU-0979', judul: 'Lampu Penerangan Mati', deskripsi: 'Lampu taman kota sudah mati selama seminggu, area menjadi gelap dan rawan kejahatan di malam hari.', kategori: 'Fasilitas Umum', status: 'pending', date: '17 Jun 2026, 09:00' },
-                { id: 'ADU-0978', judul: 'Laporan Fiktif Coba-coba', deskripsi: 'Tes aplikasi e-report apakah berfungsi dengan baik atau tidak.', kategori: 'Lainnya', status: 'rejected', date: '16 Jun 2026, 11:20' }
-            ]
+            laporanTerbaru: [],
+            isLoading: true
         };
     },
+    mounted() {
+        // Saat halaman dimuat, langsung tarik data dari database
+        this.loadLaporanPublik();
+    },
     methods: {
-        // Fungsi untuk memberikan warna badge secara dinamis sesuai prinsip HCI
+        async loadLaporanPublik() {
+            try {
+                // Endpoint ini public, tidak butuh token/header
+                const response = await axios.get('http://localhost:8080/pengaduan');
+                
+                // Kita ambil maksimal 6 laporan terbaru saja untuk halaman depan
+                this.laporanTerbaru = response.data.slice(0, 6);
+            } catch (error) {
+                console.error("Gagal memuat laporan publik:", error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
         getStatusBadge(status) {
             const badges = {
-                'pending': 'bg-cyan-100 text-info border-cyan-200', // Info / Diterima
-                'in_progress': 'bg-amber-100 text-warning border-amber-200', // Warning / Diproses
-                'resolved': 'bg-green-100 text-success border-green-200', // Success / Selesai
-                'rejected': 'bg-red-100 text-danger border-red-200' // Danger / Ditolak
+                'pending': 'bg-cyan-100 text-info border-cyan-200',
+                'in_progress': 'bg-amber-100 text-warning border-amber-200',
+                'resolved': 'bg-green-100 text-success border-green-200',
+                'rejected': 'bg-red-100 text-danger border-red-200'
             };
             return badges[status] || 'bg-gray-100 text-gray-600 border-gray-200';
         },
         translateStatus(status) {
-            const translations = {
-                'pending': 'Diterima',
-                'in_progress': 'Diproses',
-                'resolved': 'Selesai',
-                'rejected': 'Ditolak'
-            };
-            return translations[status] || status;
+            const trans = { 'pending': 'Menunggu', 'in_progress': 'Diproses', 'resolved': 'Selesai', 'rejected': 'Ditolak' };
+            return trans[status] || status;
         }
     },
     template: `
@@ -93,15 +99,28 @@ const HomePublic = {
                         </div>
                     </div>
 
-                    <div class="space-y-4">
-                        <div v-for="aduan in recentReports" :key="aduan.id" class="p-5 bg-background rounded-[12px] border border-border shadow-soft flex flex-col md:flex-row gap-5 hover:shadow-md transition-shadow group">
+                    <!-- Animasi Loading -->
+                    <div v-if="isLoading" class="flex flex-col items-center justify-center py-12 space-y-4">
+                        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                        <p class="text-text-secondary text-sm">Menarik data terbaru...</p>
+                    </div>
+
+                    <!-- State jika belum ada laporan -->
+                    <div v-else-if="laporanTerbaru.length === 0" class="text-center py-12 bg-background rounded-[12px] border border-border shadow-soft">
+                        <p class="text-text-secondary">Belum ada laporan publik saat ini.</p>
+                    </div>
+
+                    <!-- Menampilkan Data Laporan (Sudah diperbaiki variabel v-for nya) -->
+                    <div v-else class="space-y-4">
+                        <div v-for="aduan in laporanTerbaru" :key="aduan.id" class="p-5 bg-background rounded-[12px] border border-border shadow-soft flex flex-col md:flex-row gap-5 hover:shadow-md transition-shadow group">
                             <div class="flex-1">
                                 <div class="flex items-center gap-3 mb-3">
                                     <span class="font-mono text-sm text-text-secondary font-medium">{{ aduan.id }}</span>
                                     <span :class="getStatusBadge(aduan.status)" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border">
                                         {{ translateStatus(aduan.status) }}
                                     </span>
-                                    <span class="text-sm text-text-secondary ml-auto md:ml-0">{{ aduan.date }}</span>
+                                    <!-- Menampilkan tanggal, mencegah error jika null -->
+                                    <span class="text-sm text-text-secondary ml-auto md:ml-0">{{ aduan.date ? aduan.date.split(' ')[0] : '' }}</span>
                                 </div>
                                 <h3 class="font-heading text-lg font-bold text-text-primary mb-2 group-hover:text-primary transition-colors">{{ aduan.judul }}</h3>
                                 <p class="text-text-secondary text-sm line-clamp-2 leading-relaxed">{{ aduan.deskripsi }}</p>
@@ -313,33 +332,52 @@ const RegisterMasyarakat = {
 };
 
 // ==========================================
-// HALAMAN LOGIN ADMIN
+// HALAMAN LOGIN ADMIN (LIVE DATABASE)
 // ==========================================
 const LoginAdmin = {
     data() {
         return {
-            username: '',
+            email: '', // Mengubah username menjadi email agar sesuai dengan database CI4
             password: '',
             isLoading: false
         };
     },
     methods: {
-        handleLogin() {
+        async handleLogin() {
             this.isLoading = true;
             
-            // Simulasi proses verifikasi admin
-            setTimeout(() => {
-                this.isLoading = false;
-                
-                // AKTIFKAN KODE DI BAWAH INI:
-                // Simpan token dan set role sebagai 'admin'
-                localStorage.setItem('token', 'dummy-admin-token');
-                localStorage.setItem('role', 'admin');
+            try {
+                // Mengetuk pintu gerbang Auth CodeIgniter 4
+                const response = await axios.post('http://localhost:8080/login', {
+                    email: this.email,
+                    password: this.password
+                });
+
+                // LAYER KEAMANAN EKSTRA: Pastikan yang login benar-benar Admin
+                if (response.data.user.role !== 'admin') {
+                    alert('Akses Ditolak: Kredensial valid, tetapi Anda tidak memiliki hak akses Administrator!');
+                    this.isLoading = false;
+                    return; // Hentikan proses eksekusi di sini
+                }
+
+                // Jika lolos dan rolenya admin, simpan kunci akses
+                localStorage.setItem('token', response.data.token);
+                localStorage.setItem('role', response.data.user.role);
+                localStorage.setItem('nama', response.data.user.nama);
+
+                alert('Otorisasi Berhasil! Memuat Dashboard Admin...');
                 
                 // Arahkan ke Dashboard Admin
                 this.$router.push('/admin/dashboard'); 
                 
-            }, 1000);
+            } catch (error) {
+                console.error("Gagal Login Admin:", error);
+                // Tangkap pesan error dari CI4 (email tidak terdaftar / password salah)
+                const pesanError = error.response?.data?.messages?.error || 'Login Gagal, periksa koneksi atau kredensial Anda.';
+                alert(pesanError);
+            } finally {
+                this.isLoading = false;
+            }
         }
     },
     template: `
@@ -363,8 +401,8 @@ const LoginAdmin = {
                     <form class="space-y-6" @submit.prevent="handleLogin">
                         
                         <div>
-                            <label for="username" class="block text-sm font-medium text-text-primary mb-1.5">Username atau Email</label>
-                            <input id="username" v-model="username" type="text" required 
+                            <label for="email" class="block text-sm font-medium text-text-primary mb-1.5">Alamat Email Administrator</label>
+                            <input id="email" v-model="email" type="email" required 
                                 class="w-full px-4 py-2.5 bg-background border border-border rounded-[8px] focus:outline-none focus:ring-2 focus:ring-admin focus:border-admin transition-all text-sm" 
                                 placeholder="admin@ereport.com">
                         </div>
@@ -634,53 +672,121 @@ const DashboardMasyarakat = {
 const DashboardAdmin = {
     data() {
         return {
-            adminName: 'Administrator',
-            isSidebarOpen: false, // Untuk toggle di tampilan mobile
+            adminName: '',
+            isSidebarOpen: false,
             searchQuery: '',
             filterStatus: '',
-            // Dummy Data Laporan (Semua user)
-            semuaLaporan: [
-                { id: 'ADU-0985', pelapor: 'Budi Santoso', judul: 'Jalan Berlubang di Depan Rumah', kategori: 'Infrastruktur', status: 'pending', date: '18 Jun 2026' },
-                { id: 'ADU-0982', pelapor: 'Siti Aminah', judul: 'Layanan KTP Terlambat', kategori: 'Pelayanan Publik', status: 'in_progress', date: '17 Jun 2026' },
-                { id: 'ADU-0980', pelapor: 'Ahmad Faisal', judul: 'Pungli di Kantor Pelayanan', kategori: 'Pelayanan Publik', status: 'in_progress', date: '17 Jun 2026' },
-                { id: 'ADU-0979', pelapor: 'Dian Sastro', judul: 'Lampu Penerangan Mati', kategori: 'Fasilitas Umum', status: 'resolved', date: '16 Jun 2026' },
-                { id: 'ADU-0978', pelapor: 'Reza Rahardian', judul: 'Laporan Fiktif Coba-coba', kategori: 'Lainnya', status: 'rejected', date: '16 Jun 2026' }
-            ]
+            semuaLaporan: [],
+            showStatusModal: false,
+            selectedReportId: null,
+            newStatus: '',
+            isUpdating: false
         };
     },
     computed: {
-        // Fitur Filter & Search secara Real-time (Frontend)
+        // Fitur Pencarian & Filter Real-time di sisi Frontend
         filteredLaporan() {
             return this.semuaLaporan.filter(item => {
                 const matchSearch = item.judul.toLowerCase().includes(this.searchQuery.toLowerCase()) || 
-                                    item.id.toLowerCase().includes(this.searchQuery.toLowerCase());
+                                    item.id.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+                                    (item.pelapor && item.pelapor.toLowerCase().includes(this.searchQuery.toLowerCase()));
                 const matchStatus = this.filterStatus === '' || item.status === this.filterStatus;
                 return matchSearch && matchStatus;
             });
         },
-        // Kalkulasi Statistik
+        // Statistik otomatis mengikuti jumlah data asli dari database
         statTotal() { return this.semuaLaporan.length; },
         statBaru() { return this.semuaLaporan.filter(i => i.status === 'pending').length; },
         statProses() { return this.semuaLaporan.filter(i => i.status === 'in_progress').length; },
         statSelesai() { return this.semuaLaporan.filter(i => i.status === 'resolved').length; }
     },
+    mounted() {
+        // Ambil nama admin dari localStorage jalankan pengambilan data
+        this.adminName = localStorage.getItem('nama') || 'Administrator';
+        this.loadAllLaporan();
+    },
     methods: {
+        // 1. Fungsi Menarik Seluruh Laporan dari Database
+        async loadAllLaporan() {
+            try {
+                const token = localStorage.getItem('token');
+                const config = {
+                    headers: { Authorization: `Bearer ${token}` }
+                };
+                // Memanggil endpoint publik/admin untuk melihat semua aduan
+                const response = await axios.get('http://localhost:8080/pengaduan', config);
+                this.semuaLaporan = response.data;
+            } catch (error) {
+                console.error("Gagal memuat data admin:", error);
+                alert("Gagal mengambil data. Pastikan Anda sudah login sebagai Admin.");
+            }
+        },
+
+        // 2. Fungsi Hapus Laporan Langsung ke Database MySQL
+        async hancurkanLaporan(idLaporan, idDatabase) {
+            // idDatabase kita perlukan karena URL CI4 membutuhkan primary key (angka)
+            if (confirm(`PERINGATAN!\n\nApakah Anda yakin ingin MENGHAPUS permanen laporan dengan ID: ${idLaporan}?`)) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const config = {
+                        headers: { Authorization: `Bearer ${token}` }
+                    };
+
+                    // Mengirim request DELETE ke CodeIgniter 4
+                    await axios.delete(`http://localhost:8080/pengaduan/${idDatabase}`, config);
+                    
+                    alert(`Laporan ${idLaporan} berhasil dihapus dari database!`);
+                    this.loadAllLaporan(); // Refresh data tabel
+                } catch (error) {
+                    console.error("Gagal menghapus laporan:", error);
+                    alert("Akses ditolak atau gagal menghapus data.");
+                }
+            }
+        },
+
+        async ubahStatus(idLaporan, statusSaatIni) {
+            this.selectedReportId = idLaporan;
+            this.newStatus = statusSaatIni; // Set pilihan dropdown sesuai status saat ini
+            this.showStatusModal = true;
+        },
+
+        // Menutup Modal
+        closeStatusModal() {
+            this.showStatusModal = false;
+            this.selectedReportId = null;
+            this.newStatus = '';
+        },
+
+        // Mengirim data ke Database saat tombol Simpan ditekan
+        async submitUpdateStatus() {
+            if (!this.selectedReportId || !this.newStatus) return;
+            
+            this.isUpdating = true;
+            try {
+                const token = localStorage.getItem('token');
+                const config = { headers: { Authorization: `Bearer ${token}` } };
+                const payload = { status: this.newStatus };
+
+                await axios.put(`http://localhost:8080/pengaduan/${this.selectedReportId}`, payload, config);
+                
+                alert(`Sukses! Status laporan ${this.selectedReportId} berhasil diperbarui.`);
+                this.closeStatusModal(); // Tutup modal
+                this.loadAllLaporan();   // Refresh tabel otomatis
+                
+            } catch (error) {
+                console.error("Gagal mengubah status:", error);
+                alert("Terjadi kesalahan jaringan atau server saat mengubah status.");
+            } finally {
+                this.isUpdating = false;
+            }
+        },
         logout() {
-            if(confirm('Akhiri sesi Admin Anda?')) {
+            if (confirm('Akhiri sesi Admin Anda?')) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('role');
+                localStorage.removeItem('nama');
                 this.$router.push('/admin/login');
             }
-        },
-        hapusLaporan(id) {
-            // Prinsip HCI: Error Prevention & User Control (Konfirmasi Hapus)
-            if(confirm(`PERINGATAN!\n\nApakah Anda yakin ingin MENGHAPUS permanen laporan dengan ID: ${id}?`)) {
-                this.semuaLaporan = this.semuaLaporan.filter(item => item.id !== id);
-                alert(`Laporan ${id} berhasil dihapus.`);
-            }
-        },
-        ubahStatus(id) {
-            alert(`Membuka modal edit untuk laporan ${id}... (Fitur ini akan kita buat terpisah)`);
         },
         getStatusBadge(status) {
             const badges = {
@@ -851,8 +957,7 @@ const DashboardAdmin = {
                                             <button @click="ubahStatus(item.id)" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-xs font-semibold transition border border-indigo-200">
                                                 Tinjau & Edit
                                             </button>
-                                            <!-- Tombol Hapus -->
-                                            <button @click="hapusLaporan(item.id)" class="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-semibold transition border border-red-200">
+                                            <button @click="hancurkanLaporan(item.id, item.db_id || item.id)" class="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md text-xs font-semibold transition border border-red-200">
                                                 Hapus
                                             </button>
                                         </td>
@@ -869,6 +974,34 @@ const DashboardAdmin = {
 
                     </div>
                 </main>
+            </div>
+            <div v-if="showStatusModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity">
+                <div class="bg-surface rounded-[12px] shadow-xl w-full max-w-md p-6 transform transition-all border border-border">
+                    <h3 class="text-xl font-bold font-heading text-text-primary mb-2">Ubah Status Laporan</h3>
+                    <p class="text-sm text-text-secondary mb-6">
+                        Pilih status penanganan terbaru untuk laporan <span class="font-mono font-bold text-admin bg-admin/10 px-1.5 py-0.5 rounded">{{ selectedReportId }}</span>
+                    </p>
+                    
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-text-primary mb-2">Status Penanganan</label>
+                        <select v-model="newStatus" class="w-full border border-border bg-background text-text-primary rounded-[8px] py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-admin focus:border-admin text-sm transition-all shadow-sm cursor-pointer">
+                            <option value="pending">Menunggu (Pending)</option>
+                            <option value="in_progress">Sedang Diproses (In Progress)</option>
+                            <option value="resolved">Selesai (Resolved)</option>
+                            <option value="rejected">Ditolak (Rejected)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3 mt-8">
+                        <button @click="closeStatusModal" :disabled="isUpdating" class="bg-background border border-border rounded-[8px] py-2 px-4 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-slate-50 transition-colors disabled:opacity-50">
+                            Batal
+                        </button>
+                        <button @click="submitUpdateStatus" :disabled="isUpdating" class="border border-transparent rounded-[8px] shadow-soft py-2 px-5 text-sm font-medium text-white bg-admin hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-admin transition-all disabled:opacity-70 flex items-center">
+                            <svg v-if="isUpdating" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            {{ isUpdating ? 'Menyimpan...' : 'Simpan Perubahan' }}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     `

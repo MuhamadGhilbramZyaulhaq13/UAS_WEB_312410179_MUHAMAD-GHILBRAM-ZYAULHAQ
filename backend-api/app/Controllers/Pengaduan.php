@@ -66,8 +66,6 @@ class Pengaduan extends ResourceController
         } catch (\Exception $e) {
             return $this->failUnauthorized('Token tidak valid atau telah kedaluwarsa: ' . $e->getMessage());
         }
-        // ------------------------------------
-        // ------------------------------------
 
         $kode = 'ADU-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
 
@@ -84,6 +82,56 @@ class Pengaduan extends ResourceController
             return $this->respondCreated(['message' => 'Laporan berhasil dikirim', 'kode' => $kode]);
         } else {
             return $this->fail($model->errors());
+        }
+    }
+
+    
+    public function delete($kode_laporan = null)
+    {
+        $model = new PengaduanModel();
+        
+        $laporan = $model->where('kode_laporan', $kode_laporan)->first();
+
+        if (!$laporan) {
+            return $this->failNotFound("Data laporan dengan ID $kode_laporan tidak ditemukan.");
+        }
+
+        if ($model->delete($laporan['id'])) {
+            return $this->respondDeleted([
+                'status'  => 200,
+                'message' => "Laporan $kode_laporan berhasil dihapus secara permanen"
+            ]);
+        } else {
+            return $this->failServerError('Gagal menghapus data dari database.');
+        }
+    }
+
+    public function update($kode_laporan = null)
+    {
+        $model = new PengaduanModel();
+        
+        // Menangkap data JSON yang dikirim (misal: {"status": "in_progress"})
+        $json = $this->request->getJSON();
+
+        if (!$json || !isset($json->status)) {
+            return $this->failValidationErrors('Data status tidak ditemukan.');
+        }
+
+        // 1. Cari laporan berdasarkan kode uniknya
+        $laporan = $model->where('kode_laporan', $kode_laporan)->first();
+
+        if (!$laporan) {
+            return $this->failNotFound("Data laporan $kode_laporan tidak ditemukan.");
+        }
+
+        // 2. Lakukan update status ke database berdasarkan ID asli
+        if ($model->update($laporan['id'], ['status' => $json->status])) {
+            return $this->respond([
+                'status'  => 200,
+                'message' => "Status laporan $kode_laporan berhasil diperbarui menjadi " . $json->status
+            ]);
+        } else {
+            return $this->failServerError('Gagal memperbarui status di database.');
         }
     }
 }

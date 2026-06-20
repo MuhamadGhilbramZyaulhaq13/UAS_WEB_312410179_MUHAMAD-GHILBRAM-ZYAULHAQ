@@ -23,5 +23,5 @@ $routes->get('pengaduan/(:num)', 'Pengaduan::show/$1');
 
 // Route Pengaduan Terproteksi 
 $routes->post('pengaduan/create', 'Pengaduan::create', ['filter' => 'token']);
-$routes->put('pengaduan/(:num)', 'Pengaduan::update/$1', ['filter' => 'token']);
-$routes->delete('pengaduan/(:num)', 'Pengaduan::delete/$1', ['filter' => 'token']);
+$routes->put('pengaduan/(:segment)', 'Pengaduan::update/$1', ['filter' => 'token']);
+$routes->delete('pengaduan/(:segment)', 'Pengaduan::delete/$1', ['filter' => 'token']);
