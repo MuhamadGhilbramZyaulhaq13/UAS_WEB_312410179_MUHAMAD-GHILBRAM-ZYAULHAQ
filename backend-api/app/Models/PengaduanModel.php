@@ -9,7 +9,6 @@ class PengaduanModel extends Model
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';
     
-    // PASTIKAN ARRAY INI LENGKAP:
     protected $allowedFields    = [
         'kode_laporan', 
         'user_id', 
@@ -24,7 +23,6 @@ class PengaduanModel extends Model
     protected $createdField  = 'created_at';
     protected $updatedField  = 'updated_at';
 
-    // Fungsi tambahan untuk menggabungkan tabel pengaduan, users, dan kategori
     public function getPengaduan($id = false)
     {
         $this->select('pengaduan.*, users.nama as nama_pelapor, kategori.nama_kategori');
@@ -32,9 +30,9 @@ class PengaduanModel extends Model
         $this->join('kategori', 'kategori.id = pengaduan.kategori_id');
         
         if ($id === false) {
-            return $this->findAll(); // Tampilkan semua
+            return $this->findAll(); 
         }
         
-        return $this->where(['pengaduan.id' => $id])->first(); // Tampilkan satu saja
+        return $this->where(['pengaduan.id' => $id])->first();
     }
 }

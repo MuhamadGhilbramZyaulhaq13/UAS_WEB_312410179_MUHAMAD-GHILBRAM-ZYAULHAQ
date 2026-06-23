@@ -10,16 +10,13 @@ const HomePublic = {
         };
     },
     mounted() {
-        // Saat halaman dimuat, langsung tarik data dari database
         this.loadLaporanPublik();
     },
     methods: {
         async loadLaporanPublik() {
             try {
-                // Endpoint ini public, tidak butuh token/header
                 const response = await axios.get('http://localhost:8080/pengaduan');
                 
-                // Kita ambil maksimal 6 laporan terbaru saja untuk halaman depan
                 this.laporanTerbaru = response.data.slice(0, 6);
             } catch (error) {
                 console.error("Gagal memuat laporan publik:", error);
@@ -743,7 +740,7 @@ const DashboardAdmin = {
                 try {
                     const token = localStorage.getItem('token');
                     const config = { headers: { Authorization: `Bearer ${token}` } };
-                    await axios.delete(`http://localhost:8080/pengaduan/${idDatabase}`, config);
+                    await axios.delete(`http://localhost:8080/pengaduan/${idLaporan}`, config);
                     alert(`Laporan ${idLaporan} berhasil dihapus dari database!`);
                     this.loadAllLaporan(); 
                 } catch (error) {

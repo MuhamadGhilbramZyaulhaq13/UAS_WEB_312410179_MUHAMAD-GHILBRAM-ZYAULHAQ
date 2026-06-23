@@ -9,27 +9,31 @@ use Firebase\JWT\Key;
 
 class Pengaduan extends ResourceController
 {
-    // ========================================================
-    // GET /pengaduan (Menampilkan data di Dashboard)
-    // ========================================================
+
     public function index()
     {
         $model = new PengaduanModel();
-        
-        $data = $model->orderBy('created_at', 'DESC')->findAll();
-        
-        $formattedData = array_map(function($item) {
-            return [
-                'id'        => $item['kode_laporan'], 
-                'judul'     => $item['judul'],
-                'deskripsi' => $item['deskripsi'],
-                'kategori'  => $item['kategori'],
-                'status'    => $item['status'],
-                'date'      => $item['created_at']    
-            ];
-        }, $data);
+       
+        $laporan = $model->select('pengaduan.*, users.nama as pelapor')
+                         ->join('users', 'users.id = pengaduan.user_id', 'left')
+                         ->orderBy('pengaduan.created_at', 'DESC')
+                         ->findAll();
 
-        return $this->respond($formattedData);
+        $dataFormatted = array_map(function($row) {
+            return [
+                'db_id'     => $row['id'],                 // ID angka untuk keperluan hapus/update
+                'id'        => $row['kode_laporan'],       // ID unik string (ADU-XXXX) untuk tampilan
+                'pelapor'   => $row['pelapor'] ?? 'Anonim', // Jika nama tidak ada, jadikan 'Anonim'
+                'judul'     => $row['judul'],
+                'kategori'  => $row['kategori'],
+                'deskripsi' => $row['deskripsi'],
+                'status'    => $row['status'],
+                'date'      => $row['created_at'],
+                'lampiran'  => $row['lampiran'] ? base_url('uploads/' . $row['lampiran']) : null
+            ];
+        }, $laporan);
+
+        return $this->respond($dataFormatted);
     }
 
     // ========================================================
@@ -66,7 +70,12 @@ class Pengaduan extends ResourceController
         } catch (\Exception $e) {
             return $this->failUnauthorized('Token tidak valid atau telah kedaluwarsa: ' . $e->getMessage());
         }
-
+        $fileFoto = $this->request->getFile('lampiran');
+        $namaFoto = null;
+        if ($fileFoto && $fileFoto->isValid() && !$fileFoto->hasMoved()) {
+            $namaFoto = $fileFoto->getRandomName();
+            $fileFoto->move(FCPATH . 'uploads', $namaFoto);
+        }
         $kode = 'ADU-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
 
         $data = [
@@ -75,6 +84,7 @@ class Pengaduan extends ResourceController
             'judul'        => $json->judul ?? '',
             'kategori'     => $json->kategori ?? '',
             'deskripsi'    => $json->deskripsi ?? '',
+            'lampiran'     => $namaFoto,
             'status'       => 'pending'
         ];
 
